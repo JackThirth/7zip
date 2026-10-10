@@ -1696,11 +1696,18 @@ Z7_COMWF_B CZipExplorerCommand::GetCanonicalName(GUID *pguidCommandName)
 }
 
 
-Z7_COMWF_B CZipExplorerCommand::GetState(IShellItemArray * /* psiItemArray */, BOOL /* fOkToBeSlow */, EXPCMDSTATE *pCmdState)
+Z7_COMWF_B CZipExplorerCommand::GetState(IShellItemArray *psiItemArray, BOOL /* fOkToBeSlow */, EXPCMDSTATE *pCmdState)
 {
   // COM_TRY_BEGIN
   ODS("- GetState()")
   *pCmdState = ECS_ENABLED;
+  if (IsRoot)
+  {
+    // hide empty "7-Zip" submenu (for example, if all items are disabled in options)
+    LoadItems(psiItemArray);
+    if (SubCommands.IsEmpty())
+      *pCmdState = ECS_HIDDEN;
+  }
   return S_OK;
   // COM_TRY_END
 }

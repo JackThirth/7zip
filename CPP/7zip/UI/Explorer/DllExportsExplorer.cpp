@@ -52,6 +52,14 @@ Z7_DEFINE_GUID(CLSID_CZipContextMenu,
     k_7zip_GUID_Data3_Common,
     0x10, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00);
 
+// {EFD046D3-94C4-4174-8207-249F8E282E3C}
+// Separate CLSID for the Windows 11 context menu (IExplorerCommand),
+// registered by the sparse package (see /package), so it doesn't clash
+// with the classic shell extension registration of an installed 7-Zip.
+Z7_DEFINE_GUID(CLSID_CZipExplorerCommand,
+    0xefd046d3, 0x94c4, 0x4174,
+    0x82, 0x07, 0x24, 0x9f, 0x8e, 0x28, 0x2e, 0x3c);
+
 using namespace NWindows;
 
 extern
@@ -177,7 +185,8 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 {
   ODS("In DllGetClassObject\r\n");
   *ppv = NULL;
-  if (IsEqualIID(rclsid, CLSID_CZipContextMenu))
+  if (IsEqualIID(rclsid, CLSID_CZipContextMenu)
+      || IsEqualIID(rclsid, CLSID_CZipExplorerCommand))
   {
     CShellExtClassFactory *cf;
     try
