@@ -19,6 +19,7 @@
 #include "../../../Common/StringConvert.h"
 #include "../../../Common/StringToInt.h"
 
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/ErrorMsg.h"
 #include "../../../Windows/MemoryLock.h"
 #include "../../../Windows/NtCheck.h"
@@ -330,6 +331,10 @@ static BOOL InitInstance(int nCmdShow)
     x, y, xSize, ySize, NULL, NULL, g_hInstance, NULL))
     return FALSE;
 
+  #ifndef UNDER_CE
+  NDarkMode::ApplyToWindowTree(wnd);
+  #endif
+
   /*
   // doesn't work
   {
@@ -627,6 +632,10 @@ static int WINAPI WinMain2(int nCmdShow)
   g_LVN_ITEMACTIVATE_Support = (g_ComCtl32Version >= MAKELONG(71, 4));
 #endif
 
+  #ifndef UNDER_CE
+  NDarkMode::Init(ReadRegTheme());
+  #endif
+
   #if defined(_WIN32) && !defined(_WIN64) && !defined(UNDER_CE)
   Set_Wow64();
   #endif
@@ -894,6 +903,14 @@ static void ExecuteCommand(UINT commandID)
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+  #ifndef UNDER_CE
+  {
+    LRESULT result = 0;
+    if (NDarkMode::OnMainWindowMessage(hWnd, message, wParam, lParam, result))
+      return result;
+  }
+  #endif
+
   switch (message)
   {
     case WM_COMMAND:

@@ -40,6 +40,10 @@ bool ReadLockMemoryEnable();
 void SaveLockMemoryEnable(bool enable);
 
 void SaveFlatView(UInt32 panelIndex, bool enable);
+
+// Theme: 0 : System (follow Windows app mode setting), 1 : Light, 2 : Dark
+void SaveRegTheme(UInt32 mode);
+UInt32 ReadRegTheme();
 bool ReadFlatView(UInt32 panelIndex);
 
 /*

@@ -18,6 +18,42 @@ extern bool g_IsNT;
 namespace NWindows {
 namespace NControl {
 
+#ifndef UNDER_CE
+Func_DialogHook g_DialogHook;
+#endif
+
+INT_PTR Dialog_ProcessMessage(CDialog *dialog, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+  #ifndef UNDER_CE
+  if (g_DialogHook && message != WM_INITDIALOG)
+  {
+    INT_PTR result = 0;
+    if (g_DialogHook(hwnd, message, wParam, lParam, result))
+      return result;
+  }
+  #endif
+
+  /* MSDN: The dialog box procedure should return
+       TRUE  - if it processed the message
+       FALSE - if it did not process the message
+     If the dialog box procedure returns FALSE,
+     the dialog manager performs the default dialog operation in response to the message.
+  */
+
+  BOOL res;
+  try { res = BoolToBOOL(dialog->OnMessage(message, wParam, lParam)); }
+  catch(...) { return TRUE; }
+
+  #ifndef UNDER_CE
+  if (g_DialogHook && message == WM_INITDIALOG)
+  {
+    INT_PTR result = 0;
+    g_DialogHook(hwnd, message, wParam, lParam, result);
+  }
+  #endif
+  return res;
+}
+
 static
 #ifdef Z7_OLD_WIN_SDK
   BOOL
@@ -35,16 +71,11 @@ DialogProcedure(HWND dialogHWND, UINT message, WPARAM wParam, LPARAM lParam)
     return FALSE;
   if (message == WM_INITDIALOG)
     dialog->Attach(dialogHWND);
-
-  /* MSDN: The dialog box procedure should return
-       TRUE  - if it processed the message
-       FALSE - if it did not process the message
-     If the dialog box procedure returns FALSE,
-     the dialog manager performs the default dialog operation in response to the message.
-  */
-
-  try { return BoolToBOOL(dialog->OnMessage(message, wParam, lParam)); }
-  catch(...) { return TRUE; }
+  return
+    #ifdef Z7_OLD_WIN_SDK
+      (BOOL)
+    #endif
+      Dialog_ProcessMessage(dialog, dialogHWND, message, wParam, lParam);
 }
 
 bool CDialog::OnMessage(UINT message, WPARAM wParam, LPARAM lParam)

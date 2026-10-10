@@ -9,6 +9,7 @@
 #include "../../../Common/StringToInt.h"
 
 #ifndef UNDER_CE
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/ErrorMsg.h"
 #include "../../../Windows/MemoryLock.h"
 #include "../../../Windows/System.h"
@@ -117,6 +118,7 @@ bool CSettingsPage::OnInit()
   _wasChanged = false;
   _largePages_wasChanged = false;
   _memx_wasChanged = false;
+  _theme_wasChanged = false;
   /*
   _wasChanged_MemLimit = false;
   _memLimitStrings.Clear();
@@ -242,6 +244,22 @@ bool CSettingsPage::OnInit()
     SetItemText(IDE_SETTINGS_MEM_SPIN_EDIT, s);
   }
 
+  _themeCombo.Attach(GetItem(IDC_SETTINGS_THEME));
+  #ifndef UNDER_CE
+  if (NDarkMode::IsSupported())
+  {
+    _themeCombo.AddString(TEXT("System"));
+    _themeCombo.AddString(TEXT("Light"));
+    _themeCombo.AddString(TEXT("Dark"));
+    _themeCombo.SetCurSel(ReadRegTheme());
+  }
+  else
+  #endif
+  {
+    HideItem(IDT_SETTINGS_THEME);
+    HideItem(IDC_SETTINGS_THEME);
+  }
+
   _initMode = false;
   return CPropertyPage::OnInit();
 }
@@ -321,6 +339,20 @@ LONG CSettingsPage::OnApply()
     _memx_wasChanged = false;
   }
 
+  #ifndef UNDER_CE
+  if (_theme_wasChanged)
+  {
+    const int sel = _themeCombo.GetCurSel();
+    if (sel >= 0)
+    {
+      SaveRegTheme((UInt32)sel);
+      if (NDarkMode::SetMode((unsigned)sel))
+        NDarkMode::ApplyToThreadWindows();
+    }
+    _theme_wasChanged = false;
+  }
+  #endif
+
   /*
   if (_wasChanged_MemLimit)
   {
@@ -396,6 +428,12 @@ bool CSettingsPage::OnCommand(unsigned code, unsigned itemID, LPARAM param)
     {
       _memx_wasChanged = true;
       Changed();
+    }
+    if (code == CBN_SELCHANGE && itemID == IDC_SETTINGS_THEME)
+    {
+      _theme_wasChanged = true;
+      Changed();
+      return true;
     }
     /*
     if (code == CBN_SELCHANGE)

@@ -7,6 +7,7 @@
 #include "../../../Common/IntToString.h"
 #include "../../../Common/StringConvert.h"
 
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/PropVariant.h"
 #include "../../../Windows/PropVariantConv.h"
 
@@ -718,13 +719,23 @@ bool CPanel::OnCustomDraw(LPNMLVCUSTOMDRAW lplvcd, LRESULT &result)
     if (_mySelectMode)
     {
       if (realIndex != kParentIndex && _selectedStatusVector[realIndex])
-       lplvcd->clrTextBk = RGB(255, 192, 192);
+      {
+        lplvcd->clrTextBk =
+          #ifndef UNDER_CE
+            NDarkMode::IsEnabled() ? RGB(112, 48, 48) :
+          #endif
+            RGB(255, 192, 192);
+      }
     }
 
     if (_markDeletedItems && _thereAreDeletedItems)
     {
       if (IsItem_Deleted(realIndex))
-        lplvcd->clrText = RGB(255, 0, 0);
+        lplvcd->clrText =
+          #ifndef UNDER_CE
+            NDarkMode::IsEnabled() ? RGB(255, 96, 96) :
+          #endif
+            RGB(255, 0, 0);
     }
     // lplvcd->clrText = RGB(0, 0, 0);
     // result = CDRF_NEWFONT;

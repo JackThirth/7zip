@@ -19,6 +19,7 @@
 #include "../../../Common/MyException.h"
 #include "../../../Common/StringConvert.h"
 
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/FileDir.h"
 #include "../../../Windows/NtCheck.h"
 
@@ -27,6 +28,7 @@
 
 #include "../FileManager/StringUtils.h"
 #include "../FileManager/LangUtils.h"
+#include "../FileManager/RegistryUtils.h"
 
 #include "BenchmarkDialog.h"
 #include "ExtractGUI.h"
@@ -448,6 +450,10 @@ int APIENTRY WinMain(HINSTANCE  hInstance, HINSTANCE /* hPrevInstance */,
   {
     #ifdef _WIN32
     My_SetDefaultDllDirectories();
+    #endif
+
+    #ifndef UNDER_CE
+    NDarkMode::Init(ReadRegTheme());
     #endif
 
     return Main2();

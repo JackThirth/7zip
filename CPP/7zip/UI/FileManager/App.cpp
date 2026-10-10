@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "OverwriteDialogRes.h"
 
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/FileName.h"
 #include "../../../Windows/PropVariantConv.h"
 
@@ -270,6 +271,9 @@ void CApp::ReloadToolbars()
         AddButton(_buttonsImageList, _toolBar, g_StandardButtons[i], ShowButtonsLables, LargeButtons);
 
     _toolBar.AutoSize();
+    #ifndef UNDER_CE
+    NDarkMode::ApplyToWindowTree(_toolBar);
+    #endif
   }
 }
 

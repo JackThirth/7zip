@@ -39,6 +39,7 @@ COMMON_OBJS = \
 WIN_OBJS = \
   $O\Clipboard.obj \
   $O\CommonDialog.obj \
+  $O\DarkMode.obj \
   $O\DLL.obj \
   $O\ErrorMsg.obj \
   $O\FileDir.obj \
