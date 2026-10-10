@@ -208,6 +208,19 @@ public:
 
 bool IsDialogSizeOK(int xSize, int ySize, HWND hwnd = NULL);
 
+#ifndef UNDER_CE
+/* (g_DialogHook) is optional hook for all CDialog based dialogs and property pages.
+   It's used by dark mode code (Windows/DarkMode.cpp).
+   It's called before CDialog::OnMessage() for all messages except of WM_INITDIALOG.
+   For WM_INITDIALOG it's called after CDialog::OnInit(), and (result) is ignored.
+   If the hook returns true, (result) is returned from dialog procedure. */
+typedef bool (*Func_DialogHook)(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, INT_PTR &result);
+extern Func_DialogHook g_DialogHook;
+#endif
+
+// it's used by dialog procedures of CDialog and CPropertyPage
+INT_PTR Dialog_ProcessMessage(CDialog *dialog, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
 }}
 
 #endif

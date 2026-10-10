@@ -81,6 +81,7 @@ FM_OBJS = $(FM_OBJS) \
   $O\NetFolder.obj \
 
 WIN_OBJS = $(WIN_OBJS) \
+  $O\DarkMode.obj \
   $O\FileSystem.obj \
   $O\Net.obj \
   $O\SecurityUtils.obj \

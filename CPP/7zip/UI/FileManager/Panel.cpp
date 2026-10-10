@@ -7,6 +7,7 @@
 #include "../../../Common/IntToString.h"
 #include "../../../Common/StringConvert.h"
 
+#include "../../../Windows/DarkMode.h"
 #include "../../../Windows/ErrorMsg.h"
 #include "../../../Windows/FileName.h"
 #include "../../../Windows/PropVariant.h"
@@ -590,6 +591,10 @@ bool CPanel::OnCreate(CREATESTRUCT * /* createStruct */)
 
   SetTimer(kTimerID, kTimerElapse);
 
+  #ifndef UNDER_CE
+  NDarkMode::ApplyToWindowTree(*this);
+  #endif
+
   // InitListCtrl();
   RefreshListCtrl();
   
@@ -706,6 +711,11 @@ bool CPanel::OnNotify(UINT /* controlID */, LPNMHDR header, LRESULT &result)
 
   if (!_processNotify)
     return false;
+
+  #ifndef UNDER_CE
+  if (NDarkMode::OnNotify(header, result))
+    return true;
+  #endif
 
   if (header->hwndFrom == _headerComboBox)
     return OnNotifyComboBox(header, result);

@@ -32,8 +32,11 @@ APIENTRY MyProperyPageProcedure(HWND dialogHWND, UINT message, WPARAM wParam, LP
     return FALSE;
   if (message == WM_INITDIALOG)
     dialog->Attach(dialogHWND);
-  try { return BoolToBOOL(dialog->OnMessage(message, wParam, lParam)); }
-  catch(...) { return TRUE; }
+  return
+    #ifdef Z7_OLD_WIN_SDK
+      (BOOL)
+    #endif
+      Dialog_ProcessMessage(dialog, dialogHWND, message, wParam, lParam);
 }
 
 bool CPropertyPage::OnNotify(UINT /* controlID */, LPNMHDR lParam)

@@ -4,6 +4,8 @@
 #define save_y 144
 #define spin_y (save_y + 12)
 #define spin_x_size 50
+#define theme_y (spin_y + 26)
+#define theme_x 40
 
 CAPTION "Settings"
 BEGIN
@@ -27,6 +29,9 @@ BEGIN
       "4", m + 30, spin_y, spin_x_size)
   LTEXT "GB", IDT_SETTINGS_MEM_GB, m + 30 + spin_x_size + 8, spin_y + 2, xc - m - 30 - spin_x_size - 8, 8
 
+  LTEXT     "Theme:", IDT_SETTINGS_THEME, m, theme_y + 2, theme_x, 8
+  COMBOBOX  IDC_SETTINGS_THEME, m + theme_x, theme_y, 100, 64, MY_COMBO
+
   // LTEXT     "Memory usage for Compressing:", IDT_COMPRESS_MEMORY, m, 140, xc, 8
   // COMBOBOX  IDC_SETTINGS_MEM, m , 152, g1xs, yc - 152, MY_COMBO
   // LTEXT     "/ RAM", IDT_SETTINGS_MEM_RAM, m + g1xs + m, 154, xc - g1xs - m, MY_TEXT_NOPREFIX
@@ -35,3 +40,5 @@ END
 #undef save_y
 #undef spin_y
 #undef spin_x_size
+#undef theme_y
+#undef theme_x

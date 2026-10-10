@@ -38,6 +38,7 @@ static LPCTSTR const kShowSystemMenu = TEXT("ShowSystemMenu");
 static LPCTSTR const kLargePages = TEXT("LargePages");
 
 static LPCTSTR const kFlatViewName = TEXT("FlatViewArc");
+static LPCTSTR const kTheme = TEXT("Theme");
 // static LPCTSTR const kShowDeletedFiles = TEXT("ShowDeleted");
 
 static void SaveCuString(LPCTSTR keyPath, LPCWSTR valuePath, LPCWSTR value)
@@ -169,6 +170,31 @@ void CFmSettings::Load()
 
 void SaveLockMemoryEnable(bool enable) { Save7ZipOption(kLargePages, enable); }
 bool ReadLockMemoryEnable() { return Read7ZipOption(kLargePages, false); }
+
+void SaveRegTheme(UInt32 mode)
+{
+  CKey key;
+  if (mode == 0)
+  {
+    // (0) is default value (follow Windows setting). So we don't store it.
+    if (key.Open(HKEY_CURRENT_USER, kCU_FMPath, KEY_READ | KEY_WRITE) == ERROR_SUCCESS)
+      key.DeleteValue(kTheme);
+    return;
+  }
+  key.Create(HKEY_CURRENT_USER, kCU_FMPath);
+  key.SetValue(kTheme, mode);
+}
+
+UInt32 ReadRegTheme()
+{
+  UInt32 mode = 0;
+  CKey key;
+  if (key.Open(HKEY_CURRENT_USER, kCU_FMPath, KEY_READ) == ERROR_SUCCESS)
+    key.GetValue_UInt32_IfOk(kTheme, mode);
+  if (mode > 2)
+    mode = 0;
+  return mode;
+}
 
 static CSysString GetFlatViewName(UInt32 panelIndex)
 {
