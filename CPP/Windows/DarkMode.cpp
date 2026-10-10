@@ -123,6 +123,7 @@ static const COLORREF k_Color_TextDisabled = RGB(0x80, 0x80, 0x80);
 static const COLORREF k_Color_Edge         = RGB(0x4a, 0x4a, 0x4a);
 static const COLORREF k_Color_Hot          = RGB(0x3d, 0x3d, 0x3d);
 static const COLORREF k_Color_Pushed       = RGB(0x4d, 0x4d, 0x4d);
+static const COLORREF k_Color_ProgressBar  = RGB(0x06, 0xb0, 0x25);
 
 enum
 {
@@ -493,6 +494,15 @@ static void ApplyToControl(HWND hwnd)
     if (dark)
       Subclass(hwnd, k_Kind_Tab);
     SetTheme((HWND)::SendMessageW(hwnd, TCM_GETTOOLTIPS, 0, 0), themeExplorer);
+  }
+  else if (IsClass(name, PROGRESS_CLASSW))
+  {
+    /* themed progress bar ignores colors, so in dark mode we disable
+       visual styles for it and set dark background and green bar */
+    if (f_SetWindowTheme)
+      f_SetWindowTheme(hwnd, dark ? L"" : NULL, dark ? L"" : NULL);
+    ::SendMessageW(hwnd, PBM_SETBKCOLOR, 0, (LPARAM)(dark ? k_Color_Control : CLR_DEFAULT));
+    ::SendMessageW(hwnd, PBM_SETBARCOLOR, 0, (LPARAM)(dark ? k_Color_ProgressBar : CLR_DEFAULT));
   }
   else if (IsClass(name, L"#32770"))
   {
