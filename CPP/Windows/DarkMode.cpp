@@ -5,6 +5,7 @@
 #ifndef UNDER_CE
 
 #include <CommCtrl.h>
+#include <math.h>
 
 #include "DarkMode.h"
 #include "Control/Dialog.h"
@@ -123,7 +124,9 @@ static const COLORREF k_Color_TextDisabled = RGB(0x80, 0x80, 0x80);
 static const COLORREF k_Color_Edge         = RGB(0x4a, 0x4a, 0x4a);
 static const COLORREF k_Color_Hot          = RGB(0x3d, 0x3d, 0x3d);
 static const COLORREF k_Color_Pushed       = RGB(0x4d, 0x4d, 0x4d);
-static const COLORREF k_Color_ProgressBar  = RGB(0x06, 0xb0, 0x25);
+static const COLORREF k_Color_ProgressTrack  = RGB(0x3a, 0x3a, 0x3a);
+static const COLORREF k_Color_ProgressTop    = RGB(0x34, 0xd3, 0x6b);
+static const COLORREF k_Color_ProgressBottom = RGB(0x16, 0xa3, 0x4a);
 
 enum
 {
@@ -384,7 +387,8 @@ enum
   k_Kind_StatusBar,
   k_Kind_Tab,
   k_Kind_ReBar,
-  k_Kind_ToolBar
+  k_Kind_ToolBar,
+  k_Kind_Progress
 };
 
 static LRESULT CALLBACK SubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -405,6 +409,224 @@ static void Subclass(HWND hwnd, unsigned kind)
     return;
   }
   ::SetPropW(hwnd, k_Prop_Proc, (HANDLE)prev);
+}
+
+
+// ---------- animated progress bar ----------
+
+/* In dark mode the progress bar is drawn by us:
+   rounded (pill) track and bar with anti-aliased edges, percentage text,
+   the bar slides smoothly to new position, and soft sheen moves along the bar. */
+
+static const UINT_PTR k_Progress_TimerId = 0x7A37;
+static const UINT k_Progress_TimerPeriod = 15; // ms
+static const DWORD k_Progress_SheenPeriod = 2000; // ms
+static const wchar_t * const k_Prop_Anim = L"Z7_DarkMode_Anim";
+
+struct CProgressAnim
+{
+  double Shown; // currently drawn fraction [0, 1]
+  DWORD LastTick;
+  DWORD StartTick;
+};
+
+static double Clamp01(double v)
+{
+  return v < 0 ? 0 : (v > 1 ? 1 : v);
+}
+
+static double Progress_GetTarget(HWND hwnd)
+{
+  PBRANGE range;
+  range.iLow = 0;
+  range.iHigh = 100;
+  ::SendMessageW(hwnd, PBM_GETRANGE, TRUE, (LPARAM)&range);
+  const int pos = (int)::SendMessageW(hwnd, PBM_GETPOS, 0, 0);
+  if (range.iHigh <= range.iLow)
+    return 0;
+  return Clamp01(((double)pos - (double)range.iLow) / ((double)range.iHigh - (double)range.iLow));
+}
+
+static CProgressAnim *Progress_GetAnim(HWND hwnd)
+{
+  return (CProgressAnim *)::GetPropW(hwnd, k_Prop_Anim);
+}
+
+static void Progress_Start(HWND hwnd)
+{
+  if (!Progress_GetAnim(hwnd))
+  {
+    CProgressAnim *anim = new CProgressAnim;
+    anim->Shown = Progress_GetTarget(hwnd);
+    anim->LastTick = anim->StartTick = ::GetTickCount();
+    ::SetPropW(hwnd, k_Prop_Anim, (HANDLE)anim);
+  }
+  ::SetTimer(hwnd, k_Progress_TimerId, k_Progress_TimerPeriod, NULL);
+}
+
+static void Progress_Free(HWND hwnd)
+{
+  CProgressAnim *anim = Progress_GetAnim(hwnd);
+  if (anim)
+  {
+    ::RemovePropW(hwnd, k_Prop_Anim);
+    delete anim;
+  }
+}
+
+static void Progress_OnTimer(HWND hwnd)
+{
+  CProgressAnim *anim = Progress_GetAnim(hwnd);
+  if (!anim)
+    return;
+  const DWORD now = ::GetTickCount();
+  DWORD dt = now - anim->LastTick;
+  anim->LastTick = now;
+  if (dt > 100)
+    dt = 100;
+  const double target = Progress_GetTarget(hwnd);
+  // easing to target position with time constant ~90 ms
+  anim->Shown += (target - anim->Shown) * ((double)dt / ((double)dt + 90.0));
+  const double diff = target - anim->Shown;
+  if (diff < 0.0005 && diff > -0.0005)
+    anim->Shown = target;
+  if (::IsWindowVisible(hwnd))
+    ::InvalidateRect(hwnd, NULL, FALSE);
+}
+
+// coverage of pixel center (px, dy) by horizontal capsule [x0, x1] with radius (r)
+static double CapsuleCoverage(double px, double dy, double x0, double x1, double r)
+{
+  const double ax = x0 + r;
+  double bx = x1 - r;
+  if (bx < ax)
+    bx = ax;
+  const double dx = px < ax ? ax - px : (px > bx ? px - bx : 0);
+  return Clamp01(r - sqrt(dx * dx + dy * dy) + 0.5);
+}
+
+static double Chan(COLORREF c, unsigned shift)
+{
+  return (double)((c >> shift) & 0xff);
+}
+
+static double Mix(double a, double b, double t)
+{
+  return a + (b - a) * t;
+}
+
+static void Progress_Paint(HWND hwnd)
+{
+  PAINTSTRUCT ps;
+  const HDC hdcWin = ::BeginPaint(hwnd, &ps);
+  if (!hdcWin)
+    return;
+  RECT rc;
+  ::GetClientRect(hwnd, &rc);
+  const int w = rc.right;
+  const int h = rc.bottom;
+  const CProgressAnim *anim = Progress_GetAnim(hwnd);
+  const double shown = anim ? anim->Shown : Progress_GetTarget(hwnd);
+
+  BITMAPINFO bi;
+  memset(&bi, 0, sizeof(bi));
+  bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+  bi.bmiHeader.biWidth = w;
+  bi.bmiHeader.biHeight = -h; // top-down
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
+  void *bits = NULL;
+  const HDC hdc = ::CreateCompatibleDC(hdcWin);
+  const HBITMAP bmp = (w > 0 && h > 0 && hdc) ?
+      ::CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &bits, NULL, 0) : NULL;
+  if (!bmp || !bits)
+  {
+    if (bmp)
+      ::DeleteObject(bmp);
+    if (hdc)
+      ::DeleteDC(hdc);
+    ::EndPaint(hwnd, &ps);
+    return;
+  }
+  const HGDIOBJ oldBmp = ::SelectObject(hdc, bmp);
+
+  const double r = (double)h / 2;
+  const double fillX1 = shown > 0 ? 2 * r + ((double)w - 2 * r) * shown : 0;
+
+  // sheen: soft highlight that moves from left to right along the filled part
+  const double band = (double)(h * 3 > 48 ? h * 3 : 48);
+  double sheenX = -1e9;
+  if (anim && shown > 0)
+  {
+    const DWORD phase = (::GetTickCount() - anim->StartTick) % k_Progress_SheenPeriod;
+    sheenX = -band + (fillX1 + 2 * band) * ((double)phase / (double)k_Progress_SheenPeriod);
+  }
+
+  const COLORREF back = k_Color_Back;
+  UInt32 *p = (UInt32 *)bits;
+  for (int y = 0; y < h; y++)
+  {
+    const double dy = (double)y + 0.5 - r;
+    const double ty = h > 1 ? (double)y / (double)(h - 1) : 0;
+    const double fr = Mix(Chan(k_Color_ProgressTop, 0), Chan(k_Color_ProgressBottom, 0), ty);
+    const double fg = Mix(Chan(k_Color_ProgressTop, 8), Chan(k_Color_ProgressBottom, 8), ty);
+    const double fb = Mix(Chan(k_Color_ProgressTop, 16), Chan(k_Color_ProgressBottom, 16), ty);
+    for (int x = 0; x < w; x++)
+    {
+      const double px = (double)x + 0.5;
+      const double cT = CapsuleCoverage(px, dy, 0, (double)w, r);
+      double cr = Mix(Chan(back, 0), Chan(k_Color_ProgressTrack, 0), cT);
+      double cg = Mix(Chan(back, 8), Chan(k_Color_ProgressTrack, 8), cT);
+      double cb = Mix(Chan(back, 16), Chan(k_Color_ProgressTrack, 16), cT);
+      if (fillX1 > 0)
+      {
+        const double cF = CapsuleCoverage(px, dy, 0, fillX1, r) * cT;
+        if (cF > 0)
+        {
+          const double t = (px - sheenX) / band;
+          double s = 1 - t * t;
+          s = s > 0 ? s * s * 0.3 : 0;
+          cr = Mix(cr, Mix(fr, 255, s), cF);
+          cg = Mix(cg, Mix(fg, 255, s), cF);
+          cb = Mix(cb, Mix(fb, 255, s), cF);
+        }
+      }
+      *p++ = ((UInt32)(cr + 0.5) << 16) | ((UInt32)(cg + 0.5) << 8) | (UInt32)(cb + 0.5);
+    }
+  }
+
+  {
+    unsigned percent = (unsigned)(shown * 100);
+    if (percent > 100)
+      percent = 100;
+    wchar_t text[8];
+    unsigned pos = 0;
+    if (percent >= 100) text[pos++] = (wchar_t)('0' + percent / 100);
+    if (percent >= 10)  text[pos++] = (wchar_t)('0' + (percent / 10) % 10);
+    text[pos++] = (wchar_t)('0' + percent % 10);
+    text[pos++] = '%';
+    text[pos] = 0;
+
+    const HFONT font = (HFONT)::SendMessageW(::GetParent(hwnd), WM_GETFONT, 0, 0);
+    const HGDIOBJ oldFont = font ? ::SelectObject(hdc, font) : NULL;
+    ::SetBkMode(hdc, TRANSPARENT);
+    const UINT format = DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX;
+    RECT shadow = rc;
+    ::OffsetRect(&shadow, 0, 1);
+    ::SetTextColor(hdc, RGB(0x10, 0x10, 0x10));
+    ::DrawTextW(hdc, text, -1, &shadow, format);
+    ::SetTextColor(hdc, RGB(0xff, 0xff, 0xff));
+    ::DrawTextW(hdc, text, -1, &rc, format);
+    if (oldFont)
+      ::SelectObject(hdc, oldFont);
+  }
+
+  ::BitBlt(hdcWin, 0, 0, w, h, hdc, 0, 0, SRCCOPY);
+  ::SelectObject(hdc, oldBmp);
+  ::DeleteObject(bmp);
+  ::DeleteDC(hdc);
+  ::EndPaint(hwnd, &ps);
 }
 
 
@@ -497,12 +719,12 @@ static void ApplyToControl(HWND hwnd)
   }
   else if (IsClass(name, PROGRESS_CLASSW))
   {
-    /* themed progress bar ignores colors, so in dark mode we disable
-       visual styles for it and set dark background and green bar */
-    if (f_SetWindowTheme)
-      f_SetWindowTheme(hwnd, dark ? L"" : NULL, dark ? L"" : NULL);
-    ::SendMessageW(hwnd, PBM_SETBKCOLOR, 0, (LPARAM)(dark ? k_Color_Control : CLR_DEFAULT));
-    ::SendMessageW(hwnd, PBM_SETBARCOLOR, 0, (LPARAM)(dark ? k_Color_ProgressBar : CLR_DEFAULT));
+    // in dark mode we draw our own animated pill-style progress bar
+    if (dark)
+    {
+      Subclass(hwnd, k_Kind_Progress);
+      Progress_Start(hwnd);
+    }
   }
   else if (IsClass(name, L"#32770"))
   {
@@ -1031,10 +1253,35 @@ static bool Subclass_OnMessage(unsigned kind, HWND hwnd, WNDPROC proc,
     OnSettingChange(hwnd, wParam, lParam);
     return true;
   }
+  if (kind == k_Kind_Progress && message == WM_TIMER && wParam == k_Progress_TimerId)
+  {
+    if (g_Enabled)
+      Progress_OnTimer(hwnd);
+    else
+    {
+      // dark mode was disabled: return to standard drawing
+      ::KillTimer(hwnd, k_Progress_TimerId);
+      ::SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+          SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+      ::InvalidateRect(hwnd, NULL, TRUE);
+    }
+    result = 0;
+    return true;
+  }
   if (!g_Enabled)
     return false;
   switch (kind)
   {
+    case k_Kind_Progress:
+      switch (message)
+      {
+        case WM_NCPAINT:    PaintNonClient(hwnd); result = 0; return true;
+        case WM_ERASEBKGND: result = 1; return true;
+        case WM_PAINT:      Progress_Paint(hwnd); result = 0; return true;
+        default: break;
+      }
+      return false;
+
     case k_Kind_CtlColor:
       return OnCtlColor(message, wParam, result);
 
@@ -1115,6 +1362,11 @@ static LRESULT CALLBACK SubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPA
     return ::DefWindowProcW(hwnd, message, wParam, lParam);
   if (message == WM_NCDESTROY)
   {
+    if ((unsigned)(UINT_PTR)::GetPropW(hwnd, k_Prop_Kind) == k_Kind_Progress)
+    {
+      ::KillTimer(hwnd, k_Progress_TimerId);
+      Progress_Free(hwnd);
+    }
     ::RemovePropW(hwnd, k_Prop_Proc);
     ::RemovePropW(hwnd, k_Prop_Kind);
     ::RemovePropW(hwnd, k_Prop_Applied);
