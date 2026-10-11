@@ -37,7 +37,7 @@ If you already have Visual Studio 2022, open **Visual Studio Installer**, click 
 
 ```powershell
 cd $HOME\Documents
-git clone -b dark-mode-win11 https://github.com/jackthirth/7zip.git 7zip-fork
+git clone -b dark-mode-win11 https://github.com/JackThirth/7zip.git 7zip-fork
 cd 7zip-fork
 ```
 
